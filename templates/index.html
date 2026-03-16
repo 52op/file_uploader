@@ -240,6 +240,70 @@
                 </div>
             </div>
         </div>
+
+        <div class="mt-8 bg-white rounded-xl shadow-lg p-6 card-hover">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-history mr-2 text-indigo-500"></i>
+                        历史统计记录
+                    </h3>
+                    <p class="text-sm text-gray-500 mt-1">按时间筛选持久化快照，重启后仍可查看</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="history-preset px-3 py-2 rounded-lg bg-blue-50 text-blue-600" data-range="24h">近24小时</button>
+                    <button class="history-preset px-3 py-2 rounded-lg bg-gray-100 text-gray-700" data-range="7d">近7天</button>
+                    <button class="history-preset px-3 py-2 rounded-lg bg-gray-100 text-gray-700" data-range="30d">近30天</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1" for="history-from">开始时间</label>
+                    <input id="history-from" type="datetime-local" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1" for="history-to">结束时间</label>
+                    <input id="history-to" type="datetime-local" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1" for="history-limit">条数上限</label>
+                    <select id="history-limit" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button id="history-apply" class="w-full px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors duration-300">
+                        刷新历史
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-4 text-sm text-gray-500" id="history-summary">暂无历史记录</div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm text-left text-gray-600">
+                    <thead class="bg-gray-50 text-gray-700 uppercase text-xs">
+                        <tr>
+                            <th class="px-4 py-3">时间</th>
+                            <th class="px-4 py-3">总文件数</th>
+                            <th class="px-4 py-3">总上传数</th>
+                            <th class="px-4 py-3">总访问数</th>
+                            <th class="px-4 py-3">存储使用(MB)</th>
+                            <th class="px-4 py-3">上传错误</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body" class="divide-y divide-gray-100">
+                        <tr>
+                            <td colspan="6" class="px-4 py-6 text-center text-gray-400">正在加载历史记录...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </main>
 
     <!-- Footer -->
@@ -270,6 +334,7 @@
         let isUpdating = false;
         let updateTimer = null;
         let updateCount = 0;
+        let historyRange = '24h';
 
         // 数据更新函数
         async function updateStats() {
@@ -386,6 +451,80 @@
                 console.error('Failed to update charts:', error);
             }
         }
+
+        function formatDateTimeLocal(date) {
+            const pad = (value) => String(value).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
+        function setHistoryRange(range) {
+            historyRange = range;
+            const now = new Date();
+            const from = new Date(now.getTime());
+            if (range === '24h') {
+                from.setHours(from.getHours() - 24);
+            } else if (range === '7d') {
+                from.setDate(from.getDate() - 7);
+            } else if (range === '30d') {
+                from.setDate(from.getDate() - 30);
+            }
+
+            document.getElementById('history-from').value = formatDateTimeLocal(from);
+            document.getElementById('history-to').value = formatDateTimeLocal(now);
+
+            document.querySelectorAll('.history-preset').forEach(button => {
+                const active = button.dataset.range === range;
+                button.className = `history-preset px-3 py-2 rounded-lg ${active ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'}`;
+            });
+        }
+
+        async function fetchHistory() {
+            const from = document.getElementById('history-from').value;
+            const to = document.getElementById('history-to').value;
+            const limit = document.getElementById('history-limit').value;
+            const params = new URLSearchParams();
+            if (from) params.set('from', new Date(from).toISOString());
+            if (to) params.set('to', new Date(to).toISOString());
+            if (limit) params.set('limit', limit);
+
+            const tableBody = document.getElementById('history-table-body');
+            const summary = document.getElementById('history-summary');
+            tableBody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">正在加载历史记录...</td></tr>';
+
+            try {
+                const response = await fetch(`/api/stats/history?${params.toString()}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                renderHistoryTable(data.items || []);
+                summary.textContent = `共 ${data.count || 0} 条历史记录，范围 ${from || '-'} ~ ${to || '-'}`;
+            } catch (error) {
+                console.error('Failed to fetch history:', error);
+                tableBody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-red-500">历史记录加载失败</td></tr>';
+                summary.textContent = '历史记录加载失败';
+            }
+        }
+
+        function renderHistoryTable(items) {
+            const tableBody = document.getElementById('history-table-body');
+            if (!items.length) {
+                tableBody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">当前筛选条件下暂无历史记录</td></tr>';
+                return;
+            }
+
+            tableBody.innerHTML = items.slice().reverse().map(item => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 whitespace-nowrap">${new Date(item.timestamp).toLocaleString()}</td>
+                    <td class="px-4 py-3">${item.total_files || 0}</td>
+                    <td class="px-4 py-3">${item.total_uploads || 0}</td>
+                    <td class="px-4 py-3">${item.total_accesses || 0}</td>
+                    <td class="px-4 py-3">${(((item.total_size || 0) / 1024) / 1024).toFixed(2)}</td>
+                    <td class="px-4 py-3">${item.upload_errors || 0}</td>
+                </tr>
+            `).join('');
+        }
         
         let performanceChart = null;
         let storageChart = null;
@@ -486,6 +625,17 @@
             setTimeout(() => {
                 initCharts();
                 updateStats();
+                setHistoryRange('24h');
+                fetchHistory();
+
+                document.querySelectorAll('.history-preset').forEach(button => {
+                    button.addEventListener('click', () => {
+                        setHistoryRange(button.dataset.range);
+                        fetchHistory();
+                    });
+                });
+
+                document.getElementById('history-apply').addEventListener('click', fetchHistory);
 
                 // 每30秒更新一次数据，使用setTimeout避免重叠
                 window.scheduleUpdate = function() {
@@ -547,6 +697,7 @@
                 // 页面显示时恢复更新
                 if (!updateTimer && !isUpdating) {
                     updateStats();
+                    fetchHistory();
                     if (window.scheduleUpdate) {
                         window.scheduleUpdate();
                     }

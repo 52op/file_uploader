@@ -16,6 +16,7 @@ type Config struct {
 	Security      SecurityConfig      `yaml:"security"`
 	Upload        UploadConfig        `yaml:"upload"`
 	Network       NetworkConfig       `yaml:"network"`
+	Stats         StatsConfig         `yaml:"stats"`
 	Thumbnail     ThumbnailConfig     `yaml:"thumbnail"`
 	ImageOptimize ImageOptimizeConfig `yaml:"image_optimize"`
 }
@@ -38,14 +39,14 @@ type HTTPSConfig struct {
 
 // ACMEConfig ACME自动证书配置
 type ACMEConfig struct {
-	Enabled     bool              `yaml:"enabled"`      // 是否启用ACME自动证书
-	Email       string            `yaml:"email"`        // Let's Encrypt注册邮箱
-	Domains     []string          `yaml:"domains"`      // 需要申请证书的域名列表
-	Server      string            `yaml:"server"`       // ACME服务器地址，默认Let's Encrypt
-	CertDir     string            `yaml:"cert_dir"`     // 证书存储目录
-	RenewBefore int               `yaml:"renew_before"` // 证书到期前多少天开始续期，默认30天
-	DNS         DNSConfig         `yaml:"dns"`          // DNS验证配置
-	KeyType     string            `yaml:"key_type"`     // 密钥类型：RSA2048, RSA4096, EC256, EC384
+	Enabled     bool      `yaml:"enabled"`      // 是否启用ACME自动证书
+	Email       string    `yaml:"email"`        // Let's Encrypt注册邮箱
+	Domains     []string  `yaml:"domains"`      // 需要申请证书的域名列表
+	Server      string    `yaml:"server"`       // ACME服务器地址，默认Let's Encrypt
+	CertDir     string    `yaml:"cert_dir"`     // 证书存储目录
+	RenewBefore int       `yaml:"renew_before"` // 证书到期前多少天开始续期，默认30天
+	DNS         DNSConfig `yaml:"dns"`          // DNS验证配置
+	KeyType     string    `yaml:"key_type"`     // 密钥类型：RSA2048, RSA4096, EC256, EC384
 }
 
 // DNSConfig DNS验证配置
@@ -85,21 +86,21 @@ type S3Config struct {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	SecretKey               string                 `yaml:"secret_key"`                 // HMAC签名密钥
-	SignatureExpiry         int64                  `yaml:"signature_expiry"`           // 签名有效期（秒）
-	DefaultStaticFileAuth   bool                   `yaml:"default_static_file_auth"`   // 静态文件访问的全局默认设置
-	AllowedFileTypes        AllowedFileTypesConfig `yaml:"allowed_file_types"`         // 允许的文件类型配置
+	SecretKey             string                 `yaml:"secret_key"`               // HMAC签名密钥
+	SignatureExpiry       int64                  `yaml:"signature_expiry"`         // 签名有效期（秒）
+	DefaultStaticFileAuth bool                   `yaml:"default_static_file_auth"` // 静态文件访问的全局默认设置
+	AllowedFileTypes      AllowedFileTypesConfig `yaml:"allowed_file_types"`       // 允许的文件类型配置
 }
 
 // ThumbnailConfig 缩略图配置
 type ThumbnailConfig struct {
-	Enabled     bool  `yaml:"enabled"`      // 是否启用缩略图生成
-	Width       int   `yaml:"width"`        // 缩略图宽度
-	Height      int   `yaml:"height"`       // 缩略图高度
-	Quality     int   `yaml:"quality"`      // JPEG质量 (1-100)
-	MinWidth    int   `yaml:"min_width"`    // 原图最小宽度（小于此值不生成缩略图）
-	MinHeight   int   `yaml:"min_height"`   // 原图最小高度（小于此值不生成缩略图）
-	MinSizeKB   int   `yaml:"min_size_kb"`  // 原图最小文件大小（KB，小于此值不生成缩略图）
+	Enabled   bool `yaml:"enabled"`     // 是否启用缩略图生成
+	Width     int  `yaml:"width"`       // 缩略图宽度
+	Height    int  `yaml:"height"`      // 缩略图高度
+	Quality   int  `yaml:"quality"`     // JPEG质量 (1-100)
+	MinWidth  int  `yaml:"min_width"`   // 原图最小宽度（小于此值不生成缩略图）
+	MinHeight int  `yaml:"min_height"`  // 原图最小高度（小于此值不生成缩略图）
+	MinSizeKB int  `yaml:"min_size_kb"` // 原图最小文件大小（KB，小于此值不生成缩略图）
 }
 
 // AllowedFileTypesConfig 允许的文件类型配置
@@ -118,8 +119,17 @@ type UploadConfig struct {
 
 // NetworkConfig 网络配置
 type NetworkConfig struct {
-	RequestTimeout       string `yaml:"request_timeout"`        // HTTP请求超时时间
-	LogRotationInterval  string `yaml:"log_rotation_interval"`  // 日志轮转检查间隔
+	RequestTimeout      string `yaml:"request_timeout"`       // HTTP请求超时时间
+	LogRotationInterval string `yaml:"log_rotation_interval"` // 日志轮转检查间隔
+}
+
+// StatsConfig 统计持久化配置
+type StatsConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	DataDir          string `yaml:"data_dir"`
+	FlushInterval    string `yaml:"flush_interval"`
+	SnapshotInterval string `yaml:"snapshot_interval"`
+	RetentionDays    int    `yaml:"retention_days"`
 }
 
 // ImageOptimizeConfig 图片优化配置
@@ -130,8 +140,6 @@ type ImageOptimizeConfig struct {
 	DefaultQuality int      `yaml:"default_quality"` // 默认质量 (1-100)
 	AllowedFormats []string `yaml:"allowed_formats"` // 允许的输出格式：jpeg, png, webp, avif
 }
-
-
 
 var globalConfig *Config
 
@@ -208,6 +216,19 @@ func validateConfig(config *Config) error {
 
 	if config.Security.SignatureExpiry <= 0 {
 		config.Security.SignatureExpiry = 3600 // 默认1小时
+	}
+
+	if config.Stats.DataDir == "" {
+		config.Stats.DataDir = "./data/stats"
+	}
+	if config.Stats.FlushInterval == "" {
+		config.Stats.FlushInterval = "10s"
+	}
+	if config.Stats.SnapshotInterval == "" {
+		config.Stats.SnapshotInterval = "30m"
+	}
+	if config.Stats.RetentionDays <= 0 {
+		config.Stats.RetentionDays = 30
 	}
 
 	switch config.Storage.Type {
@@ -398,6 +419,14 @@ network:
   request_timeout: "10s"          # HTTP请求超时时间
   log_rotation_interval: "1h"     # 日志轮转检查间隔
 
+# 统计持久化配置
+stats:
+  enabled: true
+  data_dir: "./data/stats"
+  flush_interval: "10s"
+  snapshot_interval: "30m"
+  retention_days: 30
+
 # 缩略图配置
 thumbnail:
   enabled: true                   # 是否启用缩略图生成
@@ -427,7 +456,7 @@ image_optimize:
 
 // 全局配置管理
 var (
-	configMutex  sync.RWMutex
+	configMutex sync.RWMutex
 )
 
 // SetGlobalConfig 设置全局配置

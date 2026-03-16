@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -184,6 +185,11 @@ func main() {
 
 	// 初始化统计收集器
 	statsCollector := stats.GetStats()
+	if err := statsCollector.InitPersistence(cfg); err != nil {
+		log.Printf("初始化统计持久化失败: %v", err)
+	} else if cfg.Stats.Enabled {
+		log.Printf("统计持久化已启用，目录: %s", cfg.Stats.DataDir)
+	}
 	log.Printf("统计收集器初始化完成")
 
 	// 初始化存储管理器
@@ -192,9 +198,11 @@ func main() {
 		log.Fatalf("初始化存储管理器失败: %v", err)
 	}
 	log.Printf("存储管理器初始化完成，可用存储: %v", storageManager.GetAvailableStorages())
+	statsCollector.UpdateStorageStats(storageManager, cfg)
 
 	// 启动定期统计更新（每30秒更新一次）
 	statsCollector.StartPeriodicUpdate(storageManager, cfg, 30*time.Second)
+	statsCollector.StartPersistence(storageManager, cfg)
 	log.Printf("统计数据定期更新已启动")
 
 	// 添加配置变更回调
@@ -291,6 +299,31 @@ func main() {
 	router.GET("/api/stats", func(c *gin.Context) {
 		summary := statsCollector.GetSummary()
 		c.JSON(http.StatusOK, summary)
+	})
+
+	router.GET("/api/stats/history", func(c *gin.Context) {
+		from := parseTimeQuery(c.Query("from"), false)
+		to := parseTimeQuery(c.Query("to"), true)
+		limit := 200
+		if rawLimit := c.Query("limit"); rawLimit != "" {
+			if parsedLimit, err := strconv.Atoi(rawLimit); err == nil && parsedLimit > 0 && parsedLimit <= 2000 {
+				limit = parsedLimit
+			}
+		}
+
+		items, err := statsCollector.GetHistory(from, to, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "获取历史统计失败",
+				"details": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"items": items,
+			"count": len(items),
+		})
 	})
 
 	// 详细统计数据API端点（调试用）
@@ -557,6 +590,24 @@ func startServer(router *gin.Engine, cfg *config.Config, hotReloader *config.Hot
 	}
 
 	log.Println("服务器已关闭")
+}
+
+func parseTimeQuery(value string, endOfDay bool) time.Time {
+	if value == "" {
+		return time.Time{}
+	}
+
+	formats := []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"}
+	for _, format := range formats {
+		if parsed, err := time.Parse(format, value); err == nil {
+			if format == "2006-01-02" && endOfDay {
+				return parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			}
+			return parsed
+		}
+	}
+
+	return time.Time{}
 }
 
 type tlsCertificateReloader struct {
