@@ -1,0 +1,66 @@
+# Go 编译输出
+*.exe
+**/*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+file_uploader
+file_uploader_*
+
+# Go 测试文件
+*.test
+*.out
+
+# Go 工作区文件
+go.work
+
+# 依赖目录 (可选择是否提交到版本控制)
+# vendor/
+
+# 配置文件 (包含敏感信息)
+config/config.yaml
+config/config.yaml.backup
+*.key
+*.pem
+*.crt
+certs/
+
+# 日志文件
+logs/
+*.log
+
+# 上传文件目录
+uploads/
+backup/
+protected/
+public/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# 测试文件
+test_*
+*_test.txt
+*.py
+
+# 部署脚本生成的文件
+deploy_*
+
+# 编译二进制（无扩展名，Linux）
+start

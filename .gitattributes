@@ -1,0 +1,11 @@
+# 统一使用 LF 换行符，禁止 Git 自动转换
+* text=auto eol=lf
+
+# 明确声明二进制文件（防止被错误转换）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.dll binary

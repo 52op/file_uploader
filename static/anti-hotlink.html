@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>防盗链提示</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            margin: 20px;
+        }
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        p {
+            color: #7f8c8d;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        .highlight {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #e74c3c;
+            margin: 20px 0;
+        }
+        .code {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            color: #95a5a6;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🛡️</div>
+        <h1>访问受限</h1>
+        <p>该资源启用了防盗链保护，不允许从外部网站直接访问。</p>
+        
+        <div class="highlight">
+            <strong>🔒 安全提示</strong><br>
+            此文件受到 Referer 检查保护，只允许授权域名访问。
+        </div>
+        
+        <p>如果您是网站管理员，请检查以下配置：</p>
+        
+        <div class="code">
+allow_referer:<br>
+&nbsp;&nbsp;- "https://your-domain.com"<br>
+&nbsp;&nbsp;- "blank"  # 允许直接访问<br>
+&nbsp;&nbsp;- "localhost"  # 开发环境
+        </div>
+        
+        <p>如果您是普通用户，请通过正确的网站入口访问此资源。</p>
+        
+        <div class="footer">
+            <p>🚀 Powered by Go File Upload Service</p>
+            <p>错误代码: REFERER_CHECK_FAILED</p>
+        </div>
+    </div>
+</body>
+</html>

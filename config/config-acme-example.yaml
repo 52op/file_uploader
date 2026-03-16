@@ -1,0 +1,95 @@
+server:
+  port: "8080"
+  host: 0.0.0.0
+  https:
+    enabled: true
+    port: "8443"
+    # ACME自动证书配置
+    acme:
+      enabled: true                     # 启用ACME自动证书
+      email: "your-email@example.com"   # Let's Encrypt注册邮箱（必需）
+      domains:                          # 需要申请证书的域名列表（必需）
+        - "example.com"
+        - "www.example.com"
+      server: ""                        # ACME服务器地址，空值使用Let's Encrypt生产环境
+      cert_dir: "./certs"               # 证书存储目录
+      renew_before: 30                  # 证书到期前多少天开始续期
+      key_type: "RSA2048"               # 密钥类型：RSA2048, RSA4096, EC256, EC384
+      # DNS验证配置
+      dns:
+        provider: "alidns"              # DNS提供商：alidns, tencentcloud, cloudflare
+        auto_dns_record: true           # 启用自动DNS记录管理（支持动态IP）
+        external_ip_apis:               # 外网IP检测API列表（按顺序尝试）
+          - "https://api.ipify.org"
+          - "https://ipv4.icanhazip.com"
+          - "https://checkip.amazonaws.com"
+          - "https://ipinfo.io/ip"
+          - "https://api.myip.com"
+        # external_ip: "1.2.3.4"       # 手动指定外网IP（可选，留空则自动检测）
+        dns_check_interval: 60          # DNS检查间隔（分钟），0表示只在启动时检查
+        config:
+          # 阿里云DNS配置
+          access_key_id: "your-access-key-id"
+          access_key_secret: "your-access-key-secret"
+          region: "cn-hangzhou"
+
+storage:
+  type: local
+  local:
+    upload_dir: ./uploads
+    base_url: http://localhost:8080
+
+security:
+  secret_key: your-secret-key-change-this-in-production
+  signature_expiry: 3600
+
+---
+# 腾讯云DNS配置示例
+server:
+  https:
+    acme:
+      dns:
+        provider: "tencentcloud"
+        config:
+          secret_id: "your-secret-id"
+          secret_key: "your-secret-key"
+          region: "ap-beijing"
+
+---
+# Cloudflare DNS配置示例（方式1：邮箱+API Key）
+server:
+  https:
+    acme:
+      dns:
+        provider: "cloudflare"
+        config:
+          email: "your-email@example.com"
+          api_key: "your-api-key"
+
+---
+# Cloudflare DNS配置示例（方式2：API Token，推荐）
+server:
+  https:
+    acme:
+      dns:
+        provider: "cloudflare"
+        config:
+          api_token: "your-api-token"
+
+---
+# Let's Encrypt测试环境配置（用于开发测试）
+server:
+  https:
+    acme:
+      enabled: true
+      email: "test@example.com"
+      domains:
+        - "test.example.com"
+      server: "https://acme-staging-v02.api.letsencrypt.org/directory"  # 测试环境
+      cert_dir: "./certs-staging"
+      dns:
+        provider: "alidns"
+        config:
+          access_key_id: "your-access-key-id"
+          access_key_secret: "your-access-key-secret"
+          region: "cn-hangzhou"

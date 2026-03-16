@@ -1,0 +1,90 @@
+# 通配符配置示例文件
+# 这个文件展示了各种通配符的使用方法
+
+# 示例1：只允许图片文件
+server:
+  port: "8080"
+  host: 0.0.0.0
+
+storage:
+  type: local
+  local:
+    upload_dir: ./uploads
+    base_url: http://localhost:8080/uploads
+
+security:
+  secret_key: your-secret-key-change-this-in-production
+  signature_expiry: 3600
+
+upload:
+  max_filename_length: 100
+  anti_hotlink_image: "./static/anti-hotlink.png"
+  max_file_size: 104857600
+  allowed_extensions:
+    - "image/*"              # 允许所有图片类型（推荐）
+
+---
+# 示例2：允许所有文件类型
+upload:
+  max_filename_length: 100
+  anti_hotlink_image: "./static/anti-hotlink.png"
+  max_file_size: 104857600
+  allowed_extensions:
+    - "*"                    # 允许所有文件类型
+
+---
+# 示例3：只允许特定类型
+upload:
+  max_filename_length: 100
+  anti_hotlink_image: "./static/anti-hotlink.png"
+  max_file_size: 104857600
+  allowed_extensions:
+    - "image/*"              # 所有图片
+    - "video/*"              # 所有视频
+    - "application/pdf"      # PDF文件
+    - ".txt"                 # 文本文件
+
+---
+# 示例4：混合配置
+upload:
+  max_filename_length: 100
+  anti_hotlink_image: "./static/anti-hotlink.png"
+  max_file_size: 104857600
+  allowed_extensions:
+    - ".jpg"                 # 具体扩展名
+    - ".png"
+    - "video/*"              # MIME类型通配符
+    - "application/pdf"      # 具体MIME类型
+    - "*.zip"                # 扩展名通配符
+
+---
+# 示例5：严格限制（仅办公文档）
+upload:
+  max_filename_length: 100
+  anti_hotlink_image: "./static/anti-hotlink.png"
+  max_file_size: 52428800   # 50MB
+  allowed_extensions:
+    - "application/pdf"
+    - "application/msword"
+    - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    - "application/vnd.ms-excel"
+    - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    - ".txt"
+    - ".rtf"
+
+# 通配符说明：
+# 1. "*" - 允许所有文件类型
+# 2. "image/*" - 允许所有图片类型（image/jpeg, image/png, image/gif 等）
+# 3. "video/*" - 允许所有视频类型（video/mp4, video/avi 等）
+# 4. "audio/*" - 允许所有音频类型（audio/mp3, audio/wav 等）
+# 5. "application/*" - 允许所有应用程序类型（application/pdf, application/zip 等）
+# 6. "text/*" - 允许所有文本类型（text/plain, text/html 等）
+# 7. "application/pdf" - 允许特定的MIME类型
+# 8. ".jpg" - 允许特定的文件扩展名
+# 9. "*.jpg" - 扩展名通配符（等同于 ".jpg"）
+
+# 注意事项：
+# - 通配符匹配基于文件扩展名对应的MIME类型
+# - 如果系统无法识别文件的MIME类型，将只进行扩展名匹配
+# - 建议使用MIME类型通配符（如 "image/*"）而不是扩展名列举，更加灵活
+# - 配置 "*" 时请谨慎，确保服务器安全

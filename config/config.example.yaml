@@ -1,0 +1,114 @@
+# 文件上传服务配置示例
+# 复制此文件为 config.yaml 并根据实际情况修改配置
+
+# 服务器配置
+server:
+  host: "0.0.0.0"    # 监听地址，0.0.0.0表示监听所有网卡
+  port: "8080"       # 监听端口
+
+# 存储配置
+storage:
+  type: "local"      # 默认存储类型: "local" 或 "s3"
+
+  # 启用的存储列表（可选）
+  # 如果为空或不设置，则启用所有配置的存储
+  # 如果设置了列表，则只启用列表中的存储，避免启动时初始化未配置好的存储
+  enabled_storages: []  # 例如: ["s3_backup", "local_backup"]
+
+  # 本地存储配置（当type为"local"时使用）
+  local:
+    upload_dir: "./uploads"                    # 文件上传目录
+    base_url: "http://localhost:8080/uploads"  # 文件访问基础URL
+  
+  # S3存储配置（当type为"s3"时使用）
+  s3:
+    region: "us-east-1"                        # AWS区域
+    bucket: "your-bucket-name"                 # S3存储桶名称
+    access_key_id: "your-access-key-id"        # AWS访问密钥ID
+    secret_access_key: "your-secret-access-key" # AWS访问密钥
+    base_url: "https://your-domain.com"        # 文件访问基础URL
+    endpoint: ""                               # 自定义S3端点（可选，留空使用AWS默认）
+
+  # 多存储配置（可选）
+  # 支持配置多个不同的存储实例，可以通过API参数或路径前缀选择使用
+  storages:
+    # S3备份存储示例
+    s3_backup:
+      type: "s3"
+      region: "us-west-2"
+      bucket: "backup-bucket-name"
+      access_key_id: "backup-access-key-id"
+      secret_access_key: "backup-secret-access-key"
+      base_url: "https://backup.example.com"
+      endpoint: ""
+
+    # 另一个S3存储示例
+    s3_1:
+      type: "s3"
+      region: "eu-west-1"
+      bucket: "eu-bucket-name"
+      access_key_id: "eu-access-key-id"
+      secret_access_key: "eu-secret-access-key"
+      base_url: "https://eu.example.com"
+      endpoint: ""
+
+    # 本地备份存储示例
+    local_backup:
+      type: "local"
+      upload_dir: "./backup"
+      base_url: "http://localhost:8080/backup"
+
+# 安全配置
+security:
+  secret_key: "your-secret-key-change-this-in-production"  # HMAC签名密钥（生产环境必须修改）
+  signature_expiry: 3600                                   # 签名有效期（秒），默认1小时
+
+---
+# 生产环境配置示例
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: "8080"
+  # HTTPS配置
+  https:
+    enabled: false           # 是否启用HTTPS
+    cert_file: "cert.pem"   # SSL证书文件路径
+    key_file: "key.pem"     # SSL私钥文件路径
+    port: "8443"            # HTTPS端口
+
+# 使用S3存储的生产环境配置
+storage:
+  type: "s3"
+  s3:
+    region: "us-west-2"
+    bucket: "my-app-uploads"
+    access_key_id: "AKIAIOSFODNN7EXAMPLE"
+    secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    base_url: "https://cdn.myapp.com"
+    endpoint: ""
+
+security:
+  secret_key: "super-secret-key-for-production-use-random-string"
+  signature_expiry: 1800  # 30分钟
+
+---
+# 使用MinIO的配置示例
+
+server:
+  host: "0.0.0.0"
+  port: "8080"
+
+storage:
+  type: "s3"
+  s3:
+    region: "us-east-1"
+    bucket: "uploads"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    base_url: "http://localhost:9000"
+    endpoint: "http://localhost:9000"  # MinIO端点
+
+security:
+  secret_key: "minio-secret-key"
+  signature_expiry: 3600
