@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"embed"
 	"flag"
 	"fmt"
@@ -12,11 +13,13 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,9 +42,9 @@ import (
 var templatesFS embed.FS
 
 var (
-	logDir     = flag.String("log-dir", "", "日志文件输出目录，如果为空则只输出到控制台")
-	configPath = flag.String("config", "config/config.yaml", "配置文件路径")
-	logFile    *os.File
+	logDir         = flag.String("log-dir", "", "日志文件输出目录，如果为空则只输出到控制台")
+	configPath     = flag.String("config", "config/config.yaml", "配置文件路径")
+	logFile        *os.File
 	currentLogDate string
 )
 
@@ -213,6 +216,8 @@ func main() {
 		log.Printf("配置变更处理完成")
 	})
 
+	var certReloader *tlsCertificateReloader
+
 	// 初始化ACME证书管理器（如果启用）
 	var acmeManager *acme.Manager
 	if cfg.Server.HTTPS.Enabled && cfg.Server.HTTPS.ACME.Enabled {
@@ -224,17 +229,18 @@ func main() {
 		} else {
 			log.Printf("ACME证书管理器初始化成功")
 
+			certPath, keyPath := acmeManager.GetCertificatePaths()
+			cfg.Server.HTTPS.CertFile = certPath
+			cfg.Server.HTTPS.KeyFile = keyPath
+			certReloader = newTLSCertificateReloader(certPath, keyPath)
+			acmeManager.SetCertificateUpdatedHook(certReloader.Reload)
+
 			// 确保证书可用
 			if err := acmeManager.EnsureCertificate(); err != nil {
 				log.Printf("确保ACME证书可用失败: %v", err)
 			} else {
 				// 启动自动续期
 				acmeManager.StartAutoRenewal()
-
-				// 更新证书路径配置
-				certPath, keyPath := acmeManager.GetCertificatePaths()
-				cfg.Server.HTTPS.CertFile = certPath
-				cfg.Server.HTTPS.KeyFile = keyPath
 				log.Printf("ACME证书路径已更新: cert=%s, key=%s", certPath, keyPath)
 			}
 		}
@@ -296,7 +302,7 @@ func main() {
 		detailedStats, err := statsCollector.GetJSON()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "获取详细统计失败",
+				"error":   "获取详细统计失败",
 				"details": err.Error(),
 			})
 			return
@@ -315,12 +321,12 @@ func main() {
 			currentConfig := hotReloader.GetConfig()
 			safeConfig := map[string]interface{}{
 				"server": map[string]interface{}{
-					"port": currentConfig.Server.Port,
-					"host": currentConfig.Server.Host,
+					"port":          currentConfig.Server.Port,
+					"host":          currentConfig.Server.Host,
 					"https_enabled": currentConfig.Server.HTTPS.Enabled,
 				},
 				"storage": map[string]interface{}{
-					"type": currentConfig.Storage.Type,
+					"type":             currentConfig.Storage.Type,
 					"enabled_storages": currentConfig.Storage.EnabledStorages,
 				},
 				"security": map[string]interface{}{
@@ -340,7 +346,7 @@ func main() {
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
-					"error": "重新加载配置失败",
+					"error":   "重新加载配置失败",
 					"details": err.Error(),
 				})
 				return
@@ -351,8 +357,8 @@ func main() {
 			config.SetGlobalConfig(newConfig)
 
 			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"message": "配置重新加载成功",
+				"success":   true,
+				"message":   "配置重新加载成功",
 				"timestamp": time.Now().Unix(),
 			})
 		})
@@ -407,11 +413,11 @@ func main() {
 		cert := router.Group("/api/v1/cert")
 		cert.Use(middleware.SignatureAuth())
 		{
-			cert.GET("/info", certHandler.GetCertInfo)           // 获取证书信息
-			cert.POST("/obtain", certHandler.ObtainCertificate)  // 申请证书
-			cert.POST("/renew", certHandler.RenewCertificate)    // 续期证书
-			cert.POST("/ensure", certHandler.EnsureCertificate)  // 确保证书可用
-			cert.GET("/status", certHandler.GetACMEStatus)       // 获取ACME状态
+			cert.GET("/info", certHandler.GetCertInfo)          // 获取证书信息
+			cert.POST("/obtain", certHandler.ObtainCertificate) // 申请证书
+			cert.POST("/renew", certHandler.RenewCertificate)   // 续期证书
+			cert.POST("/ensure", certHandler.EnsureCertificate) // 确保证书可用
+			cert.GET("/status", certHandler.GetACMEStatus)      // 获取ACME状态
 		}
 	}
 
@@ -440,10 +446,10 @@ func main() {
 				}
 
 				c.JSON(http.StatusOK, gin.H{
-					"path": path,
-					"expires": expires,
+					"path":      path,
+					"expires":   expires,
 					"signature": signature,
-					"url": fmt.Sprintf("%s?expires=%d&signature=%s", path, expires, signature),
+					"url":       fmt.Sprintf("%s?expires=%d&signature=%s", path, expires, signature),
 				})
 			})
 
@@ -474,11 +480,11 @@ func main() {
 	printAPIEndpoints(cfg)
 
 	// 启动服务器
-	startServer(router, cfg, hotReloader)
+	startServer(router, cfg, hotReloader, certReloader)
 }
 
 // startServer 启动服务器（支持HTTP和HTTPS）
-func startServer(router *gin.Engine, cfg *config.Config, hotReloader *config.HotReloader) {
+func startServer(router *gin.Engine, cfg *config.Config, hotReloader *config.HotReloader, certReloader *tlsCertificateReloader) {
 	// 创建HTTP服务器
 	httpAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	httpServer := &http.Server{
@@ -490,9 +496,16 @@ func startServer(router *gin.Engine, cfg *config.Config, hotReloader *config.Hot
 	var httpsServer *http.Server
 	if cfg.Server.HTTPS.Enabled {
 		httpsAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.HTTPS.Port)
+		if certReloader == nil {
+			certReloader = newTLSCertificateReloader(cfg.Server.HTTPS.CertFile, cfg.Server.HTTPS.KeyFile)
+		}
 		httpsServer = &http.Server{
 			Addr:    httpsAddr,
 			Handler: router,
+			TLSConfig: &tls.Config{
+				MinVersion:     tls.VersionTLS12,
+				GetCertificate: certReloader.GetCertificate,
+			},
 		}
 	}
 
@@ -508,7 +521,13 @@ func startServer(router *gin.Engine, cfg *config.Config, hotReloader *config.Hot
 	if cfg.Server.HTTPS.Enabled {
 		go func() {
 			log.Printf("HTTPS服务器启动在 %s", httpsServer.Addr)
-			if err := httpsServer.ListenAndServeTLS(cfg.Server.HTTPS.CertFile, cfg.Server.HTTPS.KeyFile); err != nil && err != http.ErrServerClosed {
+			listener, err := net.Listen("tcp", httpsServer.Addr)
+			if err != nil {
+				log.Fatalf("HTTPS服务器监听失败: %v", err)
+			}
+
+			tlsListener := tls.NewListener(listener, httpsServer.TLSConfig)
+			if err := httpsServer.Serve(tlsListener); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("HTTPS服务器启动失败: %v", err)
 			}
 		}()
@@ -538,6 +557,75 @@ func startServer(router *gin.Engine, cfg *config.Config, hotReloader *config.Hot
 	}
 
 	log.Println("服务器已关闭")
+}
+
+type tlsCertificateReloader struct {
+	certPath string
+	keyPath  string
+
+	mu          sync.RWMutex
+	certificate *tls.Certificate
+	certModTime time.Time
+	keyModTime  time.Time
+}
+
+func newTLSCertificateReloader(certPath, keyPath string) *tlsCertificateReloader {
+	return &tlsCertificateReloader{
+		certPath: certPath,
+		keyPath:  keyPath,
+	}
+}
+
+func (r *tlsCertificateReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	cert, err := r.getCertificate()
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
+}
+
+func (r *tlsCertificateReloader) Reload() error {
+	_, err := r.getCertificate()
+	return err
+}
+
+func (r *tlsCertificateReloader) getCertificate() (*tls.Certificate, error) {
+	certInfo, err := os.Stat(r.certPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取证书文件状态失败: %w", err)
+	}
+
+	keyInfo, err := os.Stat(r.keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取私钥文件状态失败: %w", err)
+	}
+
+	r.mu.RLock()
+	if r.certificate != nil && certInfo.ModTime().Equal(r.certModTime) && keyInfo.ModTime().Equal(r.keyModTime) {
+		cert := r.certificate
+		r.mu.RUnlock()
+		return cert, nil
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.certificate != nil && certInfo.ModTime().Equal(r.certModTime) && keyInfo.ModTime().Equal(r.keyModTime) {
+		return r.certificate, nil
+	}
+
+	certificate, err := tls.LoadX509KeyPair(r.certPath, r.keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("加载TLS证书失败: %w", err)
+	}
+
+	r.certificate = &certificate
+	r.certModTime = certInfo.ModTime()
+	r.keyModTime = keyInfo.ModTime()
+
+	log.Printf("TLS证书已重新加载: cert=%s, key=%s", r.certPath, r.keyPath)
+	return r.certificate, nil
 }
 
 // corsMiddleware CORS中间件
@@ -672,7 +760,7 @@ func printStaticFileEndpoints(baseURL string, cfg *config.Config) {
 			}
 
 			// 从base_url中提取路径部分
-			routePath := "/" + name // 默认使用存储名称
+			routePath := "/" + name                                 // 默认使用存储名称
 			if idx := strings.LastIndex(baseURLStr, "/"); idx > 7 { // 跳过 https://
 				routePath = baseURLStr[idx:]
 			}
@@ -779,7 +867,7 @@ func addStaticFileServices(router *gin.Engine, storageManager *storage.StorageMa
 
 			// 从base_url中提取路径部分
 			// 例如：https://domain.com:8443/backup -> /backup
-			routePath := "/" + name // 默认使用存储名称
+			routePath := "/" + name                              // 默认使用存储名称
 			if idx := strings.LastIndex(baseURL, "/"); idx > 7 { // 跳过 https://
 				routePath = baseURL[idx:]
 			}
@@ -913,8 +1001,8 @@ func drawProhibitSymbol(img *image.RGBA, centerX, centerY, radius int) {
 	red := color.RGBA{200, 50, 50, 255}
 
 	// 绘制圆圈
-	for y := centerY - radius; y <= centerY + radius; y++ {
-		for x := centerX - radius; x <= centerX + radius; x++ {
+	for y := centerY - radius; y <= centerY+radius; y++ {
+		for x := centerX - radius; x <= centerX+radius; x++ {
 			dx := x - centerX
 			dy := y - centerY
 			distance := dx*dx + dy*dy
@@ -929,7 +1017,7 @@ func drawProhibitSymbol(img *image.RGBA, centerX, centerY, radius int) {
 	}
 
 	// 绘制斜线（从左上到右下）
-	for i := -radius + 5; i <= radius - 5; i++ {
+	for i := -radius + 5; i <= radius-5; i++ {
 		for thickness := -2; thickness <= 2; thickness++ {
 			x := centerX + i
 			y := centerY + i + thickness

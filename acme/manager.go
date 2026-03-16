@@ -27,18 +27,19 @@ import (
 import (
 	"github.com/go-acme/lego/v4/challenge"
 	"github.com/go-acme/lego/v4/providers/dns/alidns"
-	"github.com/go-acme/lego/v4/providers/dns/tencentcloud"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
+	"github.com/go-acme/lego/v4/providers/dns/tencentcloud"
 )
 
 // Manager ACME证书管理器
 type Manager struct {
-	config     *config.ACMEConfig
-	client     *lego.Client
-	user       *User
-	certDir    string
-	dnsProvider challenge.Provider
-	dnsManager  *DNSManager
+	config               *config.ACMEConfig
+	client               *lego.Client
+	user                 *User
+	certDir              string
+	dnsProvider          challenge.Provider
+	dnsManager           *DNSManager
+	onCertificateUpdated func() error
 }
 
 // User ACME用户信息
@@ -61,6 +62,11 @@ func (u *User) GetRegistration() *registration.Resource {
 // GetPrivateKey 获取私钥
 func (u *User) GetPrivateKey() crypto.PrivateKey {
 	return u.key
+}
+
+// SetCertificateUpdatedHook 设置证书更新后的回调
+func (m *Manager) SetCertificateUpdatedHook(hook func() error) {
+	m.onCertificateUpdated = hook
 }
 
 // NewManager 创建ACME证书管理器
@@ -137,7 +143,7 @@ func NewManager(cfg *config.ACMEConfig, networkCfg *config.NetworkConfig) (*Mana
 // initUser 初始化ACME用户
 func (m *Manager) initUser() error {
 	userKeyPath := filepath.Join(m.certDir, "user.key")
-	
+
 	var privateKey crypto.PrivateKey
 	var err error
 
@@ -467,7 +473,7 @@ func (m *Manager) ObtainCertificate() error {
 	log.Printf("[ACME] 证书文件: %s", certPath)
 	log.Printf("[ACME] 私钥文件: %s", keyPath)
 
-	return nil
+	return m.afterCertificateUpdated("申请")
 }
 
 // RenewCertificate 续期证书
@@ -500,6 +506,39 @@ func (m *Manager) RenewCertificate() error {
 	}
 
 	log.Printf("[ACME] 证书续期成功")
+	return m.afterCertificateUpdated("续期")
+}
+
+func (m *Manager) afterCertificateUpdated(action string) error {
+	certPath, _ := m.GetCertificatePaths()
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return fmt.Errorf("读取%s后证书失败: %v", action, err)
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return fmt.Errorf("解析%s后证书失败: 无效的PEM格式", action)
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("解析%s后证书失败: %v", action, err)
+	}
+
+	log.Printf("[ACME] 新证书有效期: not_before=%s, not_after=%s, 剩余=%d天",
+		cert.NotBefore.Format(time.RFC3339),
+		cert.NotAfter.Format(time.RFC3339),
+		int(time.Until(cert.NotAfter).Hours()/24),
+	)
+
+	if m.onCertificateUpdated != nil {
+		if err := m.onCertificateUpdated(); err != nil {
+			return fmt.Errorf("触发证书热加载失败: %v", err)
+		}
+		log.Printf("[ACME] 新证书已预热加载到HTTPS服务")
+	}
+
 	return nil
 }
 
