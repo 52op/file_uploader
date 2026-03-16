@@ -5,6 +5,7 @@
 ## 🚀 主要特性
 
 ### 🎯 核心功能
+
 - **多存储支持**：本地存储、Amazon S3兼容存储，支持多实例配置
 - **智能图片处理**：条件化缩略图生成，支持JPG/PNG/GIF/WebP/AVIF格式
 - **安全认证**：HMAC-SHA256签名验证，防止未授权访问
@@ -14,6 +15,7 @@
 - **热配置重载**：支持配置文件热重载，无需重启服务
 
 ### 🔧 高级特性
+
 - **HTTPS支持**：内置HTTPS服务器，支持ACME自动证书申请和续期
 - **DNS自动管理**：支持阿里云DNS自动记录管理和外网IP检测
 - **Prometheus监控**：完整的指标收集和监控支持
@@ -26,6 +28,7 @@
 ### 安装和运行
 
 1. **下载并运行**
+   
    ```bash
    # 下载项目
    git clone https://github.com/52op/file_uploader.git
@@ -39,6 +42,7 @@
    ```
 
 2. **访问服务**
+   
    - 统计页面：http://localhost:8080
    - 健康检查：http://localhost:8080/health
    - Prometheus指标：http://localhost:8080/metrics
@@ -74,13 +78,14 @@ thumbnail:
 ## 🔧 配置说明
 
 ### 存储配置
+
 支持多种存储后端，可同时配置多个存储实例：
 
 ```yaml
 storage:
   type: local  # 默认存储类型
   enabled_storages: ["protected_images", "public_files"]
-  
+
   storages:
     protected_images:
       type: local
@@ -91,7 +96,7 @@ storage:
         - "http://localhost:3000"
         - "https://your-domain.com"
         - "blank"  # 允许空referer
-        
+
     public_files:
       type: local
       upload_dir: ./public
@@ -100,6 +105,7 @@ storage:
 ```
 
 ### 缩略图配置
+
 智能缩略图生成，支持条件控制：
 
 ```yaml
@@ -114,12 +120,14 @@ thumbnail:
 ```
 
 **缩略图智能逻辑**：
+
 - 满足条件：生成实际缩略图，返回缩略图URL
 - 不满足条件：返回原图URL作为thumbnail_url
 - 功能禁用：返回原图URL作为thumbnail_url
 - 简化调用端逻辑，无需额外判断
 
 ### 文件类型配置
+
 灵活的文件类型控制，支持通配符模式：
 
 ```yaml
@@ -141,6 +149,7 @@ upload:
 ```
 
 **支持的通配符模式**：
+
 - `*` - 允许所有文件类型
 - `image/*` - 允许所有图片类型（基于MIME类型）
 - `video/*` - 允许所有视频类型
@@ -149,6 +158,7 @@ upload:
 - `*.jpg` - 扩展名通配符（等同于 `.jpg`）
 
 ### 图片优化配置
+
 支持动态图片优化和格式转换：
 
 ```yaml
@@ -161,12 +171,14 @@ image_optimize:
 ```
 
 **图片优化功能**：
+
 - 动态尺寸调整：`?w=800&h=600`
 - 质量控制：`?q=80`
 - 格式转换：`?f=avif` （支持转换为AVIF格式）
 - 组合使用：`?w=800&h=600&q=80&f=avif`
 
 ### 安全配置
+
 多层安全保护机制：
 
 ```yaml
@@ -188,6 +200,7 @@ storages:
 ## 📚 API文档
 
 ### 文件上传
+
 ```bash
 # 基本上传
 curl -X POST "http://localhost:8080/api/v1/upload" \
@@ -203,6 +216,7 @@ curl -X POST "http://localhost:8080/api/v1/upload" \
 ```
 
 **响应示例**：
+
 ```json
 {
   "success": true,
@@ -215,6 +229,7 @@ curl -X POST "http://localhost:8080/api/v1/upload" \
 ```
 
 ### 批量操作
+
 ```bash
 # 批量上传
 curl -X POST "http://localhost:8080/api/v1/batch/upload" \
@@ -231,6 +246,7 @@ curl -X POST "http://localhost:8080/api/v1/batch/delete" \
 ```
 
 ### 文件访问
+
 ```bash
 # 公开文件访问
 http://localhost:8080/uploads/example.jpg
@@ -264,7 +280,9 @@ func generateStaticSignature(secretKey, filePath string, timestamp int64) string
 ## 📊 监控和统计
 
 ### 实时统计页面
+
 访问 http://localhost:8080 查看：
+
 - 文件上传/删除/访问统计
 - 存储使用情况分布
 - 性能指标图表
@@ -272,13 +290,16 @@ func generateStaticSignature(secretKey, filePath string, timestamp int64) string
 - 错误统计信息
 
 ### Prometheus监控
+
 内置Prometheus指标收集：
+
 ```bash
 # 访问指标端点
 curl http://localhost:8080/metrics
 ```
 
 主要指标：
+
 - `file_uploader_uploads_total` - 上传总数
 - `file_uploader_upload_duration_seconds` - 上传耗时
 - `file_uploader_storage_usage_bytes` - 存储使用量
@@ -288,6 +309,7 @@ curl http://localhost:8080/metrics
 ## 🚀 部署指南
 
 ### Docker部署
+
 ```bash
 # 构建镜像
 docker build -t file_uploader .
@@ -302,6 +324,7 @@ docker run -d \
 ```
 
 ### 系统服务安装
+
 ```bash
 # Linux系统服务
 sudo ./file_uploader install-service
@@ -311,6 +334,7 @@ sudo ./file_uploader install-service
 ```
 
 ### HTTPS和证书
+
 ```yaml
 server:
   https:
@@ -331,12 +355,15 @@ server:
 ## 🛠️ 开发和集成
 
 ### 客户端SDK示例
+
 项目提供多种语言的客户端示例：
+
 - Go客户端：`examples/client_signature.go`
 - Python客户端：`examples/simple_test.py`
 - Bun/Next.js集成：`examples/bun-backend/`
 
 ### 自定义存储后端
+
 实现 `Storage` 接口即可添加新的存储后端：
 
 ```go
@@ -362,6 +389,7 @@ type Storage interface {
 ## 🎯 新功能亮点
 
 ### ✅ 最新更新
+
 - **AVIF格式支持**：完整支持AVIF图片格式的上传、优化和缩略图生成
 - **通配符文件类型配置**：支持 `*`、`image/*`、`video/*` 等通配符模式
 - **灵活文件类型控制**：可在配置文件中动态调整允许的文件类型
@@ -371,6 +399,7 @@ type Storage interface {
 - **智能缩略图返回**：API始终返回thumbnail_url，简化调用端逻辑
 
 ### 🔧 配置灵活性
+
 - 缩略图生成条件完全可配置
 - 支持禁用缩略图功能
 - 多存储实例独立安全配置
@@ -388,4 +417,4 @@ MIT License
 
 - GitHub: https://github.com/52op/file_uploader
 - 博客: https://blog.sztcrs.com
-- 演示站点: https://wuhu-cdn.hxljzz.com
+- 演示站点: https://wuhu-cdn.hxljzz.com:8443/
